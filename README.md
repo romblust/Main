@@ -1,1 +1,3 @@
-# Main
+<p align="left">
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=16&duration=2200&pause=500&color=00FF88&background=00000000&center=false&vCenter=false&width=820&height=420&lines=%5BBOOT%5D+_Initializing+network_interface..._;%5BPROC%5D+_Hacking+Luau+mainframe..._;%5BDECRYPT%5D+_Decrypting+core_files..._;%5BINJECT%5D+_Injecting+bytecode_stream..._;%5BBUILD%5D+_Compiling+runtime_environment..._;%5BVERIFY%5D+_Verifying+integrity..._;%5BHANDSHAKE%5D+Writing+S.E.T.H..._;%5BAUTH%5D+_Access+granted..._;%5BSESSION%5D+_Establishing+session_key..._;%5BLOAD%5D+_Loading+Luau+compiler..._;%5BEXEC%5D+_Executing+vm_payload..._;%5BDEPLOY%5D+_Deploying+hook_layer..._;%5BTRACE%5D+_Trace+success..._;%5BTERMINAL%5D+_Terminal+ready..._;%5BSTATUS%5D+_SYSTEM%3A+ONLINE+%7C+MODULES%3A+bytepack+envforge+uinull+xor-chain+%7C+UPTIME%3A+00%3A14%3A23_">
+</p>
