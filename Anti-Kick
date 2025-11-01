@@ -1,0 +1,13 @@
+hookfunction(game.Players.LocalPlayer.Kick, function(Player, Reason)
+    warn("Kick attempted for: %Self" :format(Reason))
+end)
+
+local OldNameCall
+OldNameCall = hookmetamethod(game, "__namecall", function(Self, ...)
+    if Self == game.Players.LocalPlayer and table.find({"Kick", "kick"}, getnamecallmethod()) then
+        warn("Kick attempted for: %Self" :format((...)[1]))
+        return
+    end
+    
+    return OldNameCall(Self, ...)
+end)
