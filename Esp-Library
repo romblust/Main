@@ -102,18 +102,6 @@ local EspInterface = {
 				Color3.new(),
 				1
 			},
-			OffScreenArrow = false,
-			OffScreenArrowColor = {
-				Color3.new(1, 1, 1),
-				1
-			},
-			OffScreenArrowSize = 15,
-			OffScreenArrowRadius = 150,
-			OffScreenArrowOutline = true,
-			OffScreenArrowOutlineColor = {
-				Color3.new(),
-				1
-			},
 		}
 	}
 };
@@ -384,13 +372,6 @@ function Sensor:Update()
 		end
 
 		self.Corners = CalculateCorners(GetBoundingBox(Cache));
-	elseif self.Settings.OffScreenArrow then
-		local _, yaw, roll = CFrame.Identity.ToOrientation(Camera.CFrame);
-		local flatCFrame = CFrame.Angles(0, yaw, roll) + Camera.CFrame.Position;
-		local objectSpace = CFrame.Identity.PointToObjectSpace(flatCFrame, Head.Position);
-		local angle = math.atan2(objectSpace.Z, objectSpace.X);
-
-		self.direction = Vector2.new(math.cos(angle), math.sin(angle));
 	end
 end
 
@@ -525,24 +506,6 @@ function Sensor:Render()
 		TracerOutline.From = Tracer.From;
 	end
 
-	Hidden.Arrow.Visible = Enabled and (not OnScreen) and Settings.OffScreenArrow;
-	Hidden.ArrowOutline.Visible = Hidden.Arrow.Visible and Settings.OffScreenArrowOutline;
-	if Hidden.Arrow.Visible then
-		local Arrow = Hidden.Arrow;
-		Arrow.PointA = Vector2.zero.Min(Vector2.zero.Max(ViewPortSize * 0.5 + self.direction * Settings.OffScreenArrowRadius, Vector2.one * 25), ViewPortSize - Vector2.one * 25);
-		Arrow.PointB = Arrow.PointA - RotateVector(self.direction, 0.45) * Settings.OffScreenArrowSize;
-		Arrow.PointC = Arrow.PointA - RotateVector(self.direction, - 0.45) * Settings.OffScreenArrowSize;
-		Arrow.Color = Settings.OffScreenArrowColor[1];
-		Arrow.Transparency = Settings.OffScreenArrowColor[2];
-
-		local ArrowOutline = Hidden.ArrowOutline;
-		ArrowOutline.PointA = Arrow.PointA;
-		ArrowOutline.PointB = Arrow.PointB;
-		ArrowOutline.PointC = Arrow.PointC;
-		ArrowOutline.Color = Settings.OffScreenArrowOutlineColor[1];
-		ArrowOutline.Transparency = Settings.OffScreenArrowOutlineColor[2];
-	end
-
 	local Box3DEnabled = Enabled and OnScreen and Settings.Box3D;
 	for Index = 1, # Box3D do
 		local Face = Box3D[Index];
@@ -592,20 +555,26 @@ function EspInterface:Load()
 	for _, Player in next, Players:GetPlayers() do
 		if Player ~= LocalPlayer then
 			CreateObject(Player);
-		end
+		end;
+
+        Player.CharacterAdded:Connect(function(Character)
+            if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("Humanoid") and Character:FindFirstChild("Head") then
+                CreateObject(Player);
+            end;
+        end);
 	end
 
-	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
+	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player);
 		if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("Humanoid") and Player.Character:FindFirstChild("Head") then
-			CreateObject(Player)
-		end
-	end)
+			CreateObject(Player);
+		end;
 
-	EspInterface.CharacterAdded = Players.CharacterAdded:Connect(function(Player)
-		if Player and Player:FindFirstChild("HumanoidRootPart") and Player:FindFirstChild("Humanoid") and Player:FindFirstChild("Head") then
-			CreateObject(Player)
-		end
-	end)
+		Player.CharacterAdded:Connect(function(Character)
+            if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("Humanoid") and Character:FindFirstChild("Head") then
+                CreateObject(Player);
+            end;
+        end);
+	end);
 
 	EspInterface.PlayerRemoving = Players.PlayerRemoving:Connect(RemoveObject);
 	EspInterface.Is_Loaded = true;
