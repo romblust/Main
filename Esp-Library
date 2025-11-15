@@ -589,7 +589,6 @@ function EspInterface:Unload()
 
 	EspInterface.PlayerAdded:Disconnect();
 	EspInterface.PlayerRemoving:Disconnect();
-	EspInterface.CharacterAdded:Disconnect();
 	EspInterface.Is_Loaded = false;
 end
 
