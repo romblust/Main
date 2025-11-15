@@ -601,7 +601,7 @@ function EspInterface:GetCharacter(Player)
 end
 
 function EspInterface:GetArmor(Player)
-	return Player and Player.Character and Player.Character:FindFirstChild("BodyEffects") and Player.Character.BodyEffects.Armor.Value
+	return Player and Player.Character and Player.Character:FindFirstChild("BodyEffects") and Player.Character:FindFirstChild("BodyEffects"):FindFirstChild("Armor") and Player.Character.BodyEffects.Armor.Value
 end
 
 function EspInterface:GetHealth(Player)
