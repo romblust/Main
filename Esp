@@ -1,0 +1,651 @@
+--Open Source!.
+
+local RunService = game:GetService("RunService");
+local Players = game:GetService("Players");
+local CoreGui = game:GetService("CoreGui");
+local Workspace = game:GetService("Workspace");
+
+local LocalPlayer = Players.LocalPlayer;
+local Camera = Workspace.CurrentCamera;
+local ViewPortSize = Camera.ViewportSize;
+local WorldToViewPortPoint = Camera.WorldToViewportPoint;
+local Container = Instance.new("Folder", gethui and gethui() or CoreGui);
+
+local Health_Bar_Offset = Vector2.new(5, 0);
+local Health_Bar_Outline = Vector2.new(0, 1);
+local Armor_Bar_Offset = Vector2.new(7, 0);
+local Name_Offset = Vector2.new(0, 2);
+local Distance_Offset = Vector2.new(0, 2);
+
+local Vertices = {
+	Vector3.new(-1, -1, -1),
+	Vector3.new(-1, 1, -1),
+	Vector3.new(-1, 1, 1),
+	Vector3.new(-1, -1, 1),
+	Vector3.new(1, -1, -1),
+	Vector3.new(1, 1, -1),
+	Vector3.new(1, 1, 1),
+	Vector3.new(1, -1, 1)
+};
+
+local EspInterface = {
+	Is_Loaded = false,
+	ObjectCache = {},
+	Whitelist = {},
+	SharedSettings = {
+		TextSize = 13,
+		TextFont = 2,
+		LimitDistance = false,
+		MaxDistance = 150,
+	},
+	MainSettings = {
+		Main = {
+			Enabled = false,
+			Box = false,
+			BoxColor = {
+				Color3.new(255, 255, 255),
+				1
+			},
+			BoxOutline = true,
+			BoxOutlineColor = {
+				Color3.new(),
+				1
+			},
+			BoxFill = false,
+			BoxFillColor = {
+				Color3.new(1, 0, 0),
+				0.5
+			},
+			HealthBar = false,
+			HealthyColor = Color3.new(0, 1, 0),
+			DyingColor = Color3.new(1, 0, 0),
+			HealthBarOutline = true,
+			HealthBarOutlineColor = {
+				Color3.new(),
+				0.5
+			},
+			ArmorBar = false,
+			Box3D = false,
+			Box3dColor = {
+				Color3.new(255, 255, 255),
+				1
+			},
+			Name = false,
+			NameColor = {
+				Color3.new(1, 1, 1),
+				1
+			},
+			NameOutline = true,
+			NameOutlineColor = Color3.new(),
+			Weapon = false,
+			WeaponColor = {
+				Color3.new(1, 1, 1),
+				1
+			},
+			WeaponOutline = true,
+			WeaponOutlineColor = Color3.new(),
+			Distance = false,
+			DistanceColor = {
+				Color3.new(1, 1, 1),
+				1
+			},
+			DistanceOutline = true,
+			DistanceOutlineColor = Color3.new(),
+			Tracer = false,
+			TracerOrigin = "Bottom",
+			TracerColor = {
+				Color3.new(255, 255, 255),
+				1
+			},
+			TracerOutline = true,
+			TracerOutlineColor = {
+				Color3.new(),
+				1
+			},
+			OffScreenArrow = false,
+			OffScreenArrowColor = {
+				Color3.new(1, 1, 1),
+				1
+			},
+			OffScreenArrowSize = 15,
+			OffScreenArrowRadius = 150,
+			OffScreenArrowOutline = true,
+			OffScreenArrowOutlineColor = {
+				Color3.new(),
+				1
+			},
+		}
+	}
+};
+
+local function GetBodyPart(Part)
+	return Part == "Head" or string.find(Part, "Torso") or string.find(Part, "Leg") or string.find(Part, "Arm")
+end
+
+local function GetBoundingBox(Parts)
+	local Minimum, Maximum;
+	for Index = 1, # Parts do
+		local Part = Parts[Index];
+		local Offset, Size = Part.CFrame, Part.Size;
+
+		Minimum = Vector3.zero.Min(Minimum or Offset.Position, (Offset - Size * 0.5).Position);
+		Maximum = Vector3.zero.Max(Maximum or Offset.Position, (Offset + Size * 0.5).Position);
+	end
+
+	if not Minimum or not Maximum then
+		return nil, nil
+	end
+
+	local Center = (Minimum + Maximum) * 0.5;
+	local Front = Vector3.new(Center.X, Center.Y, Maximum.Z);
+	return CFrame.new(Center, Front), Maximum - Minimum;
+end
+
+local function WorldToScreen(World)
+	local Screen, Bounds = WorldToViewPortPoint(Camera, World);
+
+	return Vector2.new(Screen.X, Screen.Y), Bounds, Screen.Z;
+end
+
+local function CalculateCorners(Offset, Size)
+	local Corners = {};
+	for Index = 1, # Vertices do
+		Corners[Index] = WorldToScreen((Offset + Size * 0.5 * Vertices[Index]).Position);
+	end
+
+	local Minimum = Vector2.zero.Min(ViewPortSize, table.unpack(Corners));
+	local Maximum = Vector2.zero.Max(Vector2.zero, table.unpack(Corners));
+	return {
+		Corners = Corners,
+		TopLeft = Vector2.new(math.floor(Minimum.X), math.floor(Minimum.Y)),
+		TopRight = Vector2.new(math.floor(Maximum.X), math.floor(Minimum.Y)),
+		BottomLeft = Vector2.new(math.floor(Minimum.X), math.floor(Maximum.Y)),
+		BottomRight = Vector2.new(math.floor(Maximum.X), math.floor(Maximum.Y))
+	};
+end
+
+local function RotateVector(Vector, Radians)
+	local Cos, Sine = math.cos(Radians), math.sin(Radians);
+	
+	return Vector2.new(Cos * Vector.X - Sine * Vector.Y, Sine * Vector.X + Cos * Vector.Y);
+end
+
+local Sensor = {};
+Sensor.__index = Sensor;
+
+function Sensor.new(Player, Interface)
+	local self = setmetatable({}, Sensor);
+	self.Player = assert(Player, "Missing argument #1 (Player expected)");
+	self.Interface = assert(Interface, "Missing argument #2 (table expected)");
+	self:Construct();
+	return self;
+end
+
+function Sensor:Construct()
+	self.CharacterCache = {};
+	self.ChildrenCount = 0;
+	self.TrashBin = {};
+	self.Drawings = {
+		Box3D = {
+			{
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				})
+			},
+			{
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				})
+			},
+			{
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				})
+			},
+			{
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				}),
+				self:Create("Line", {
+					Thickness = 1,
+					Visible = false
+				})
+			}
+		},
+
+		InitDrawings = {
+			TracerOutline = self:Create("Line", {
+				Thickness = 3,
+				Visible = false
+			}),
+			Tracer = self:Create("Line", {
+				Thickness = 1,
+				Visible = false
+			}),
+			BoxFill = self:Create("Square", {
+				Filled = true,
+				Visible = false
+			}),
+			BoxOutline = self:Create("Square", {
+				Thickness = 3,
+				Visible = false
+			}),
+			Box = self:Create("Square", {
+				Thickness = 1,
+				Visible = false
+			}),
+			HealthBarOutline = self:Create("Line", {
+				Thickness = 3,
+				Visible = false
+			}),
+			HealthBar = self:Create("Line", {
+				Thickness = 1,
+				Visible = false
+			}),
+			HealthText = self:Create("Text", {
+				Center = true,
+				Visible = false
+			}),
+			ArmorBar = self:Create("Line", {
+				Thickness = 1,
+				Visible = false
+			}),
+			ArmorBarOutline = self:Create("Line", {
+				Thickness = 3,
+				Visible = false
+			}),
+			Name = self:Create("Text", {
+				Text = self.Player.Name,
+				Center = true,
+				Visible = false
+			}),
+			Distance = self:Create("Text", {
+				Center = true,
+				Visible = false
+			}),
+			Weapon = self:Create("Text", {
+				Center = true,
+				Visible = false
+			}),
+		},
+
+		Hidden = {
+			ArrowOutline = self:Create("Triangle", {
+				Thickness = 3,
+				Visible = false
+			}),
+			Arrow = self:Create("Triangle", {
+				Filled = true,
+				Visible = false
+			})
+		}
+	};
+
+	self.RenderConnection = RunService.PreRender:Connect(function(Time)
+		self:Update(Time);
+		self:Render(Time);
+	end);
+end
+
+function Sensor:Create(Class, Properties)
+	local CDrawing = Drawing.new(Class);
+	for Property, value in next, Properties do
+		CDrawing[Property] = value;
+	end
+
+	self.TrashBin[# self.TrashBin + 1] = CDrawing;
+	return CDrawing;
+end
+
+function Sensor:Destruct()
+	self.RenderConnection:Disconnect();
+
+	for _, CDrawing in next, self.TrashBin do
+		if CDrawing and type(CDrawing.Remove) == "function" then
+			CDrawing:Remove();
+		end
+	end
+
+	table.clear(self);
+end
+
+function Sensor:Update()
+	local Interface = self.Interface;
+
+	self.Settings = Interface.MainSettings["Main"];
+	self.Character = Interface:GetCharacter(self.Player);
+	self.Armor = Interface:GetArmor(self.Player);
+	self.Health, self.MaxHealth = Interface:GetHealth(self.Character);
+	self.Weapon = Interface:GetTool(self.Player);
+	self.Enabled = self.Settings.Enabled and self.Character and not (# Interface.Whitelist > 0 and not table.find(Interface.Whitelist, self.Player.UserId));
+
+	local Head = self.Enabled and Workspace.FindFirstChild(self.Character, "Head");
+	if not Head then
+		return;
+	end
+
+	local _, OnScreen, Depth = WorldToScreen(Head.Position);
+	self.OnScreen = OnScreen;
+	self.Distance = Depth;
+
+	if Interface.SharedSettings.LimitDistance and Depth > Interface.SharedSettings.MaxDistance then
+		self.OnScreen = false;
+	end
+
+	if self.OnScreen then
+		local Cache = self.CharacterCache;
+		local Children = Workspace.GetChildren(self.Character);
+		if not Cache[1] or self.ChildrenCount ~= # Children then
+			table.clear(Cache);
+
+			for Index = 1, # Children do
+				local Part = Children[Index];
+				if Workspace.IsA(Part, "BasePart") and GetBodyPart(Part.Name) then
+					Cache[# Cache + 1] = Part;
+				end
+			end
+
+			self.ChildrenCount = # Children;
+		end
+		if # Cache == 0 then
+			return
+		end
+
+		self.Corners = CalculateCorners(GetBoundingBox(Cache));
+	elseif self.Settings.OffScreenArrow then
+		local _, yaw, roll = CFrame.Identity.ToOrientation(Camera.CFrame);
+		local flatCFrame = CFrame.Angles(0, yaw, roll) + Camera.CFrame.Position;
+		local objectSpace = CFrame.Identity.PointToObjectSpace(flatCFrame, Head.Position);
+		local angle = math.atan2(objectSpace.Z, objectSpace.X);
+
+		self.direction = Vector2.new(math.cos(angle), math.sin(angle));
+	end
+end
+
+function Sensor:Render()
+	local OnScreen = self.OnScreen or false;
+	local Enabled = self.Enabled or false;
+	local InitDrawings = self.Drawings.InitDrawings;
+	local Hidden = self.Drawings.Hidden;
+	local Box3D = self.Drawings.Box3D;
+	local Interface = self.Interface;
+	local Settings = self.Settings;
+	local Corners = self.Corners;
+	if not Corners then
+		for _, PDrawing in pairs(InitDrawings) do
+			if PDrawing then
+				PDrawing.Visible = false
+			end
+		end
+		return
+	end	
+
+	InitDrawings.Box.Visible = Enabled and OnScreen and Settings.Box;
+	InitDrawings.BoxOutline.Visible = InitDrawings.Box.Visible and Settings.BoxOutline;
+	if InitDrawings.Box.Visible then
+		local Box = InitDrawings.Box;
+		Box.Position = Corners.TopLeft;
+		Box.Size = Corners.BottomRight - Corners.TopLeft;
+		Box.Color = Settings.BoxColor[1];
+		Box.Transparency = Settings.BoxColor[2];
+
+		local BoxOutline = InitDrawings.BoxOutline;
+		BoxOutline.Position = Box.Position;
+		BoxOutline.Size = Box.Size;
+		BoxOutline.Color = Settings.BoxOutlineColor[1];
+		BoxOutline.Transparency = Settings.BoxOutlineColor[2];
+	end
+
+	InitDrawings.BoxFill.Visible = Enabled and OnScreen and Settings.BoxFill;
+	if InitDrawings.BoxFill.Visible then
+		local BoxFill = InitDrawings.BoxFill;
+		BoxFill.Position = Corners.TopLeft;
+		BoxFill.Size = Corners.BottomRight - Corners.TopLeft;
+		BoxFill.Color = Settings.BoxFillColor[1];
+		BoxFill.Transparency = Settings.BoxFillColor[2];
+	end
+
+	InitDrawings.HealthBar.Visible = Enabled and OnScreen and Settings.HealthBar;
+	InitDrawings.HealthBarOutline.Visible = InitDrawings.HealthBar.Visible and Settings.HealthBarOutline;
+	if InitDrawings.HealthBar.Visible then
+		local BarFrom = Corners.TopLeft - Health_Bar_Offset;
+		local BarTo = Corners.BottomLeft - Health_Bar_Offset;
+
+		local HealthBar = InitDrawings.HealthBar;
+		HealthBar.To = BarTo;
+		HealthBar.From = Vector2.zero.Lerp(BarTo, BarFrom, self.Health / self.MaxHealth);
+		HealthBar.Color = Color3.new().Lerp(Settings.DyingColor, Settings.HealthyColor, self.Health / self.MaxHealth);
+
+		local HealthBarOutline = InitDrawings.HealthBarOutline;
+		HealthBarOutline.To = BarTo + Health_Bar_Outline;
+		HealthBarOutline.From = BarFrom - Health_Bar_Outline;
+		HealthBarOutline.Color = Settings.HealthBarOutlineColor[1];
+		HealthBarOutline.Transparency = Settings.HealthBarOutlineColor[2];
+	end
+
+	InitDrawings.ArmorBar.Visible = Enabled and OnScreen and Settings.ArmorBar;
+	if InitDrawings.ArmorBar.Visible then
+		local BarFrom = Corners.TopLeft - Armor_Bar_Offset
+		local BarTo = Corners.BottomLeft - Armor_Bar_Offset
+		local MaxArmor = 130
+		local ArmorBar = InitDrawings.ArmorBar
+		local ArmorBarOutline = InitDrawings.ArmorBarOutline
+		ArmorBar.From = Vector2.zero.Lerp(BarTo, BarFrom, self.Armor / MaxArmor)
+		ArmorBar.To = BarTo
+		ArmorBar.Color = Color3.fromRGB(0, 150, 255)
+		ArmorBarOutline.From = BarFrom - Health_Bar_Outline
+		ArmorBarOutline.To = BarTo + Health_Bar_Outline
+		ArmorBarOutline.Color = Color3.fromRGB(0, 100, 200)
+		ArmorBarOutline.Transparency = 1
+	end
+
+	InitDrawings.Name.Visible = Enabled and OnScreen and Settings.Name;
+	if InitDrawings.Name.Visible then
+		local Name = InitDrawings.Name;
+		Name.Size = Interface.SharedSettings.TextSize;
+		Name.Font = Interface.SharedSettings.TextFont;
+		Name.Color = Settings.NameColor[1];
+		Name.Transparency = Settings.NameColor[2];
+		Name.Outline = Settings.NameOutline;
+		Name.OutlineColor = Settings.NameOutlineColor;
+		Name.Position = (Corners.TopLeft + Corners.TopRight) * 0.5 - Vector2.yAxis * Name.TextBounds.Y - Name_Offset;
+	end
+
+	InitDrawings.Distance.Visible = Enabled and OnScreen and self.Distance and Settings.Distance;
+	if InitDrawings.Distance.Visible then
+		local Distance = InitDrawings.Distance;
+		Distance.Text = math.round(self.Distance) .. " studs";
+		Distance.Size = Interface.SharedSettings.TextSize;
+		Distance.Font = Interface.SharedSettings.TextFont;
+		Distance.Color = Settings.DistanceColor[1];
+		Distance.Transparency = Settings.DistanceColor[2];
+		Distance.Outline = Settings.DistanceOutline;
+		Distance.OutlineColor = Settings.DistanceOutlineColor;
+		Distance.Position = (Corners.BottomLeft + Corners.BottomRight) * 0.5 + Distance_Offset;
+	end
+
+	InitDrawings.Weapon.Visible = Enabled and OnScreen and Settings.Weapon;
+	if InitDrawings.Weapon.Visible then
+		local Weapon = InitDrawings.Weapon;
+		Weapon.Text = self.Weapon;
+		Weapon.Size = Interface.SharedSettings.TextSize;
+		Weapon.Font = Interface.SharedSettings.TextFont;
+		Weapon.Color = Settings.WeaponColor[1];
+		Weapon.Transparency = Settings.WeaponColor[2];
+		Weapon.Outline = Settings.WeaponOutline;
+		Weapon.OutlineColor = Settings.WeaponOutlineColor;
+		Weapon.Position = (Corners.BottomLeft + Corners.BottomRight) * 0.5 + (InitDrawings.Distance.Visible and Distance_Offset + Vector2.yAxis * InitDrawings.Distance.TextBounds.Y or Vector2.zero);
+	end
+
+	InitDrawings.Tracer.Visible = Enabled and OnScreen and Settings.Tracer;
+	InitDrawings.TracerOutline.Visible = InitDrawings.Tracer.Visible and Settings.TracerOutline;
+	if InitDrawings.Tracer.Visible then
+		local Tracer = InitDrawings.Tracer;
+		Tracer.Color = Settings.TracerColor[1];
+		Tracer.Transparency = Settings.TracerColor[2];
+		Tracer.To = (Corners.BottomLeft + Corners.BottomRight) * 0.5;
+		Tracer.From = Settings.TracerOrigin == "Middle" and ViewPortSize * 0.5 or Settings.TracerOrigin == "Top" and ViewPortSize * Vector2.new(0.5, 0) or Settings.TracerOrigin == "Bottom" and ViewPortSize * Vector2.new(0.5, 1);
+
+		local TracerOutline = InitDrawings.TracerOutline;
+		TracerOutline.Color = Settings.TracerOutlineColor[1];
+		TracerOutline.Transparency = Settings.TracerOutlineColor[2];
+		TracerOutline.To = Tracer.To;
+		TracerOutline.From = Tracer.From;
+	end
+
+	Hidden.Arrow.Visible = Enabled and (not OnScreen) and Settings.OffScreenArrow;
+	Hidden.ArrowOutline.Visible = Hidden.Arrow.Visible and Settings.OffScreenArrowOutline;
+	if Hidden.Arrow.Visible then
+		local Arrow = Hidden.Arrow;
+		Arrow.PointA = Vector2.zero.Min(Vector2.zero.Max(ViewPortSize * 0.5 + self.direction * Settings.OffScreenArrowRadius, Vector2.one * 25), ViewPortSize - Vector2.one * 25);
+		Arrow.PointB = Arrow.PointA - RotateVector(self.direction, 0.45) * Settings.OffScreenArrowSize;
+		Arrow.PointC = Arrow.PointA - RotateVector(self.direction, - 0.45) * Settings.OffScreenArrowSize;
+		Arrow.Color = Settings.OffScreenArrowColor[1];
+		Arrow.Transparency = Settings.OffScreenArrowColor[2];
+
+		local ArrowOutline = Hidden.ArrowOutline;
+		ArrowOutline.PointA = Arrow.PointA;
+		ArrowOutline.PointB = Arrow.PointB;
+		ArrowOutline.PointC = Arrow.PointC;
+		ArrowOutline.Color = Settings.OffScreenArrowOutlineColor[1];
+		ArrowOutline.Transparency = Settings.OffScreenArrowOutlineColor[2];
+	end
+
+	local Box3DEnabled = Enabled and OnScreen and Settings.Box3D;
+	for Index = 1, # Box3D do
+		local Face = Box3D[Index];
+		for Index = 1, # Face do
+			local Line = Face[Index];
+			Line.Visible = Box3DEnabled;
+			Line.Color = Settings.Box3dColor[1];
+			Line.Transparency = Settings.Box3dColor[2];
+		end
+
+		if Box3DEnabled then
+			local Line1 = Face[1];
+			Line1.From = Corners.Corners[Index];
+			Line1.To = Corners.Corners[Index == 4 and 1 or Index + 1];
+
+			local Line2 = Face[2];
+			Line2.From = Corners.Corners[Index == 4 and 1 or Index + 1];
+			Line2.To = Corners.Corners[Index == 4 and 5 or Index + 5];
+
+			local Line3 = Face[3];
+			Line3.From = Corners.Corners[Index == 4 and 5 or Index + 5];
+			Line3.To = Corners.Corners[Index == 4 and 8 or Index + 4];
+		end
+	end
+end
+
+function EspInterface:Load()
+	assert(not EspInterface.Is_Loaded, "Esp has already been loaded.");
+
+	local function CreateObject(Player)
+		EspInterface.ObjectCache[Player] = {
+			Sensor.new(Player, EspInterface)
+		};
+	end
+
+	local function RemoveObject(Player)
+		local Object = EspInterface.ObjectCache[Player];
+		if Object then
+			for Index = 1, # Object do
+				Object[Index]:Destruct();
+			end
+
+			EspInterface.ObjectCache[Player] = nil;
+		end
+	end
+
+	for _, Player in next, Players:GetPlayers() do
+		if Player ~= LocalPlayer then
+			CreateObject(Player);
+		end
+	end
+	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
+		if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("Humanoid") and Player.Character:FindFirstChild("Head") then
+			CreateObject(Player)
+		end
+	end)
+	EspInterface.CharacterAdded = Players.PlayerAdded:Connect(function(Player)
+		Player.CharacterAdded:Connect(function(Player)
+			if Player and Player:FindFirstChild("HumanoidRootPart") and Player:FindFirstChild("Humanoid") and Player:FindFirstChild("Head") then
+				CreateObject(Player)
+			end
+		end)
+	end)
+
+	EspInterface.PlayerRemoving = Players.PlayerRemoving:Connect(RemoveObject);
+	EspInterface.Is_Loaded = true;
+end
+
+function EspInterface:Unload()
+	assert(EspInterface.Is_Loaded, "Esp has not been loaded yet.");
+
+	for _, Object in next, EspInterface.ObjectCache do
+		for Index = 1, # Object do
+			Object[Index]:Destruct();
+		end
+	end
+
+	EspInterface.PlayerAdded:Disconnect();
+	EspInterface.PlayerRemoving:Disconnect();
+	EspInterface.CharacterAdded:Disconnect();
+	EspInterface.Is_Loaded = false;
+end
+
+function EspInterface:GetTool(Player)
+	return Player and Player.Character and Player.Character:FindFirstChildWhichIsA("Tool") and Player.Character:FindFirstChildWhichIsA("Tool").Name or "nan"
+end
+
+function EspInterface:GetCharacter(Player)
+	return Player and Player.Character;
+end
+
+function EspInterface:GetArmor(Player)
+	return Player and Player.Character and Player.Character:FindFirstChild("BodyEffects") and Player.Character.BodyEffects.Armor.Value
+end
+
+function EspInterface:GetHealth(Player)
+	local Humanoid = Player and Workspace.FindFirstChildOfClass(Player, "Humanoid");
+
+	if Humanoid then
+		return Humanoid.Health, Humanoid.MaxHealth;
+	end
+
+	return 100, 100;
+end
+
+return EspInterface;
