@@ -12,6 +12,7 @@ local WorldToViewPortPoint = Camera.WorldToViewportPoint;
 local Health_Bar_Offset = Vector2.new(5, 0);
 local Health_Bar_Outline = Vector2.new(0, 1);
 local Armor_Bar_Offset = Vector2.new(7, 0);
+local Armor_Bar_Outline = Vector2.new(0, 1);
 local Name_Offset = Vector2.new(0, 2);
 local Distance_Offset = Vector2.new(0, 2);
 
@@ -63,6 +64,11 @@ local EspInterface = {
 				0.5
 			},
 			ArmorBar = false,
+			ArmorBarOutline = true,
+			ArmorBarOutlineColor = {
+				Color3.new(),
+				0.5
+			},
 			Box3D = false,
 			Box3dColor = {
 				Color3.new(255, 255, 255),
@@ -435,19 +441,23 @@ function Sensor:Render()
 	end
 
 	InitDrawings.ArmorBar.Visible = Enabled and OnScreen and Settings.ArmorBar;
+	InitDrawings.ArmorBarOutline.Visible = InitDrawings.ArmorBar.Visible and Settings.ArmorBarOutline;
 	if InitDrawings.ArmorBar.Visible then
-		local BarFrom = Corners.TopLeft - Armor_Bar_Offset
-		local BarTo = Corners.BottomLeft - Armor_Bar_Offset
-		local MaxArmor = 130
-		local ArmorBar = InitDrawings.ArmorBar
-		local ArmorBarOutline = InitDrawings.ArmorBarOutline
-		ArmorBar.From = Vector2.zero.Lerp(BarTo, BarFrom, self.Armor / MaxArmor)
-		ArmorBar.To = BarTo
-		ArmorBar.Color = Color3.fromRGB(0, 150, 255)
-		ArmorBarOutline.From = BarFrom - Health_Bar_Outline
-		ArmorBarOutline.To = BarTo + Health_Bar_Outline
-		ArmorBarOutline.Color = Color3.fromRGB(0, 100, 200)
-		ArmorBarOutline.Transparency = 1
+		local BarFrom = Corners.TopLeft - Armor_Bar_Offset;
+		local BarTo = Corners.BottomLeft - Armor_Bar_Offset;
+
+		local MaxArmor = 130;
+		
+		local ArmorBar = InitDrawings.ArmorBar;
+		ArmorBar.From = Vector2.zero.Lerp(BarTo, BarFrom, self.Armor / MaxArmor);
+		ArmorBar.To = BarTo;
+		ArmorBar.Color = Color3.fromRGB(0, 150, 255);
+
+		local ArmorBarOutline = InitDrawings.ArmorBarOutline;
+		ArmorBarOutline.From = BarFrom - Armor_Bar_Outline;
+		ArmorBarOutline.To = BarTo + Armor_Bar_Outline;
+		ArmorBarOutline.Color = Settings.ArmorBarOutlineColor[1];
+		ArmorBarOutline.Transparency = Settings.ArmorBarOutlineColor[2];
 	end
 
 	InitDrawings.Name.Visible = Enabled and OnScreen and Settings.Name;
