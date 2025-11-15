@@ -447,7 +447,7 @@ function Sensor:Render()
 		local BarTo = Corners.BottomLeft - Armor_Bar_Offset;
 
 		local MaxArmor = 130;
-		
+
 		local ArmorBar = InitDrawings.ArmorBar;
 		ArmorBar.From = Vector2.zero.Lerp(BarTo, BarFrom, self.Armor / MaxArmor);
 		ArmorBar.To = BarTo;
@@ -611,7 +611,21 @@ function EspInterface:GetCharacter(Player)
 end
 
 function EspInterface:GetArmor(Player)
-	return Player and Player.Character and Player.Character:FindFirstChild("BodyEffects") and Player.Character:FindFirstChild("BodyEffects"):FindFirstChild("Armor") and Player.Character.BodyEffects.Armor.Value
+    if not Player or not Player.Character then
+        return 0
+    end
+
+    local BodyEffects = Player.Character:FindFirstChild("BodyEffects")
+    if not BodyEffects then
+        return 0
+    end
+
+    local Armor = BodyEffects:FindFirstChild("Armor")
+    if not Armor then
+        return 0
+    end
+
+    return Armor.Value or 0
 end
 
 function EspInterface:GetHealth(Player)
