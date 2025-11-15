@@ -572,17 +572,17 @@ function EspInterface:Load()
         end)
 	end
 
-	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
-		if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
-			CreateObject(Player)
-		end
-
-		Player.CharacterAdded:Connect(function(Character)
-            if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("FULLY_LOADED_CHAR") then
-                CreateObject(Player)
-            end
-        end)
-	end)
+    EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
+    	Player.CharacterAdded:Connect(function(Character)
+    		Character:WaitForChild("HumanoidRootPart")
+    		Character:WaitForChild("FULLY_LOADED_CHAR")
+    		CreateObject(Player)
+    	end)
+    	
+    	if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
+    		CreateObject(Player)
+    	end
+    end)
 
 	EspInterface.PlayerRemoving = Players.PlayerRemoving:Connect(RemoveObject)
 	EspInterface.Is_Loaded = true;
