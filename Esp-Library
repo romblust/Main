@@ -552,29 +552,29 @@ function EspInterface:Load()
 
 	for _, Player in next, Players:GetPlayers() do
 		if Player ~= LocalPlayer then
-			CreateObject(Player);
-		end;
+			CreateObject(Player)
+		end
 
         Player.CharacterAdded:Connect(function(Character)
             if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("Humanoid") and Character:FindFirstChild("Head") then
                 CreateObject(Player);
-            end;
-        end);
+            end
+        end)
 	end
 
-	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player);
+	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
 		if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("Humanoid") and Player.Character:FindFirstChild("Head") then
-			CreateObject(Player);
-		end;
+			CreateObject(Player)
+		end
 
 		Player.CharacterAdded:Connect(function(Character)
             if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("Humanoid") and Character:FindFirstChild("Head") then
-                CreateObject(Player);
-            end;
-        end);
-	end);
+                CreateObject(Player)
+            end
+        end)
+	end)
 
-	EspInterface.PlayerRemoving = Players.PlayerRemoving:Connect(RemoveObject);
+	EspInterface.PlayerRemoving = Players.PlayerRemoving:Connect(RemoveObject)
 	EspInterface.Is_Loaded = true;
 end
 
