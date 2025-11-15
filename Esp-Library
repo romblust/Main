@@ -612,20 +612,20 @@ end
 
 function EspInterface:GetArmor(Player)
     if not Player or not Player.Character then
-        return nil
+        return 0
     end
 
     local BodyEffects = Player.Character:FindFirstChild("BodyEffects")
     if not BodyEffects then
-        return nil
+        return 0
     end
 
     local Armor = BodyEffects:FindFirstChild("Armor")
     if not Armor then
-        return nil
+        return 0
     end
 
-    return Armor.Value
+    return Armor.Value or 0
 end
 
 function EspInterface:GetHealth(Player)
