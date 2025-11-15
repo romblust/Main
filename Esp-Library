@@ -594,17 +594,17 @@ function EspInterface:Load()
 			CreateObject(Player);
 		end
 	end
+
 	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
 		if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("Humanoid") and Player.Character:FindFirstChild("Head") then
 			CreateObject(Player)
 		end
 	end)
-	EspInterface.CharacterAdded = Players.PlayerAdded:Connect(function(Player)
-		Player.CharacterAdded:Connect(function(Player)
-			if Player and Player:FindFirstChild("HumanoidRootPart") and Player:FindFirstChild("Humanoid") and Player:FindFirstChild("Head") then
-				CreateObject(Player)
-			end
-		end)
+
+	EspInterface.CharacterAdded = Players.CharacterAdded:Connect(function(Player)
+		if Player and Player:FindFirstChild("HumanoidRootPart") and Player:FindFirstChild("Humanoid") and Player:FindFirstChild("Head") then
+			CreateObject(Player)
+		end
 	end)
 
 	EspInterface.PlayerRemoving = Players.PlayerRemoving:Connect(RemoveObject);
