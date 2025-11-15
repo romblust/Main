@@ -4,7 +4,7 @@
 local Adonis = loadstring(game:HttpGet('https://raw.githubusercontent.com/romblust/Main/refs/heads/main/Adonis/Init'))()
 
 -- Configure
-Adonis.DebugMode = false  -- Enable to see debug logs
+Adonis.DebugMode = false  -- Enable debug logs
 Adonis.Emulator = false   -- Enable remote emulation
 Adonis.Coroutine = false  -- Enable coroutine hooks
 Adonis.MessageOut = true  -- Enable MessageOut bypass
