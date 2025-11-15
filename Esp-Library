@@ -2,14 +2,12 @@
 
 local RunService = game:GetService("RunService");
 local Players = game:GetService("Players");
-local CoreGui = game:GetService("CoreGui");
 local Workspace = game:GetService("Workspace");
 
 local LocalPlayer = Players.LocalPlayer;
 local Camera = Workspace.CurrentCamera;
 local ViewPortSize = Camera.ViewportSize;
 local WorldToViewPortPoint = Camera.WorldToViewportPoint;
-local Container = Instance.new("Folder", gethui and gethui() or CoreGui);
 
 local Health_Bar_Offset = Vector2.new(5, 0);
 local Health_Bar_Outline = Vector2.new(0, 1);
