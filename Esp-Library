@@ -627,7 +627,7 @@ function EspInterface:Unload()
 end
 
 function EspInterface:GetTool(Player)
-	return Player and Player.Character and Player.Character:FindFirstChildWhichIsA("Tool") and Player.Character:FindFirstChildWhichIsA("Tool").Name or "nan"
+	return Player and Player.Character and Player.Character:FindFirstChildWhichIsA("Tool") and Player.Character:FindFirstChildWhichIsA("Tool").Name or ""
 end
 
 function EspInterface:GetCharacter(Player)
