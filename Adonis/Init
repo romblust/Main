@@ -3,12 +3,25 @@ local Adonis = {}
 Adonis.DebugMode = false
 Adonis.Emulator = false
 Adonis.Coroutine = false
-Adonis.MessageOut = true
+Adonis.MessageOut = false
 
 local Table = {}
-local GetValue = setvalue or debug.setupvalue
+local SetUpValue = setupvalue or debug.setupvalue or setvalue
 local ClientTable = nil
 local FoundSend = false
+
+local Stats = {
+    AntiCheatFunctions = 0,
+    ClientFunctions = 0,
+    RemoteFunctions = 0,
+    ProcessFunctions = 0,
+    DetectedTables = 0,
+    DisconnectHooks = 0,
+    KillHooks = 0,
+    DetectedHooks = 0,
+    DetectorHooks = 0,
+    MessageOutConnections = 0
+}
 
 local Detectors = {
     "indexInstance",
@@ -29,7 +42,7 @@ local Detectors = {
 }
 
 function Adonis:Init()
-    if not game.IsLoaded then 
+    if not game:IsLoaded() then 
         game.Loaded:Wait() 
     end
 
@@ -42,51 +55,33 @@ function Adonis:Init()
 
     local LocalPlayer = Players.LocalPlayer
 
-    local OldInstance; OldInstance = hookmetamethod(game, "__namecall", newcclosure(function(Self, ...)
+    local OldNamecall; OldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(Self, ...)
+        if checkcaller() then
+            return OldNamecall(Self, ...)
+        end
+        
         local Method = getnamecallmethod()
         local Args = {...}
         
-        if Method == "Destroy" and Self:IsA("LocalScript") and Self.Parent == LocalPlayer then
+        if Method == "Kick" and typeof(Self) == "Instance" and Self == LocalPlayer then
             if Adonis.DebugMode then
-                warn("Blocked LocalScript Destroy Attempt!\n")
+                warn("Blocked Kick Attempt!\n")
             end
             return
         end
         
-        return OldInstance(Self, ...)
-    end))
-
-    local OldNewIndex; OldNewIndex = hookmetamethod(game, "__newindex", newcclosure(function(Self, Property, Value)
-        if Self:IsA("LocalScript") and Self.Parent == LocalPlayer then
-            if Property == "Disabled" and Value == true then
+        if (Method == "FireServer" or Method == "InvokeServer") and typeof(Self) == "Instance" then
+            local RemoteName = Self.Name
+            if RemoteName:find("AC_") or RemoteName:find("Detected") or RemoteName:find("Client_") then
                 if Adonis.DebugMode then
-                    warn("Blocked LocalScript Disable Attempt!\n")
-                end
-                return
-            end
-            
-            if Property == "Source" and (type(Value) == "string" and Value:find("while true do")) then
-                if Adonis.DebugMode then
-                    warn("Blocked LocalScript Source Change (Crash Attempt)!\n")
+                    warn(string.format("Blocked Remote: %s\n", RemoteName))
                 end
                 return
             end
         end
         
-        return OldNewIndex(Self, Property, Value)
+        return OldNamecall(Self, ...)
     end))
-
-    LocalPlayer.DescendantAdded:Connect(function(Descendant)
-        if Descendant:IsA("LocalScript") then
-            task.wait()
-            if Descendant.Source:find("while true do") or Descendant.Source:find("while wait") then
-                if Adonis.DebugMode then
-                    warn("Detected and Blocked Crash Script!\n")
-                end
-                Descendant:Destroy()
-            end
-        end
-    end)
 
     local DInfo; DInfo = hookfunction(debug.info, newcclosure(function(Caller, Options)
         if checkcaller() then 
@@ -95,7 +90,8 @@ function Adonis:Init()
         
         Caller = type(Caller) == "number" and Caller + 1 or Caller
         
-        if getcallingscript().Name == "ClientMover" then
+        local Success, CallingScript = pcall(getcallingscript)
+        if Success and CallingScript and CallingScript.Name == "ClientMover" then
             if Adonis.DebugMode then 
                 warn(string.format(
                     "Debug.Info Function Has Been Called!\nPassed Arguments: %s %s\n",
@@ -122,7 +118,8 @@ function Adonis:Init()
             return SelfKick(Player, Reason)
         end
 
-        if getcallingscript().Name == "ClientMover" and Player == LocalPlayer then
+        local Success, CallingScript = pcall(getcallingscript)
+        if Success and CallingScript and CallingScript.Name == "ClientMover" and Player == LocalPlayer then
             if Adonis.DebugMode then
                 warn(string.format(
                     "LocalPlayer Kick Function Has Been Called!\nPassed Arguments: %s\n",
@@ -136,40 +133,36 @@ function Adonis:Init()
     end))
 
     local function GetInfo(func)
-        return debug.info(func, "nslaf")
+        if not func or typeof(func) ~= "function" then
+            return {}
+        end
+        local Success, Result = pcall(debug.info, func, "nslaf")
+        return Success and Result or {}
     end
 
-    local OldNamecall; OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
-        local Method = getnamecallmethod()
-        local Args = {...}
-        
-        if Method == "Kick" and Self == game.Players.LocalPlayer then
-            if Adonis.DebugMode then
-                warn("Blocked Kick Attempt!\n")
-            end
-            return
+	if Adonis.DebugMode and typeof(Collected) == "function" then
+        local Success, Name, Source = pcall(function()
+            return debug.info(Collected, "ns")
+        end)
+		
+        if Success and Source and Source:find("Client") then
+            warn("Found function:", Name, "in", Source)
         end
-        
-        if Method == "FireServer" or Method == "InvokeServer" then
-            local RemoteName = Self.Name
-            if RemoteName:find("AC_") or RemoteName:find("Detected") or RemoteName:find("Client_") then
-                if Adonis.DebugMode then
-                    warn(string.format("Blocked Remote: %s\n", RemoteName))
-                end
-                return
-            end
-        end
-        
-        return OldNamecall(Self, ...)
-    end)
+    end
 
     for _, Collected in getgc(true) do
         if typeof(Collected) == "function" then
-            local Name, Source = debug.info(Collected, "ns")
+            local Success, Name, Source = pcall(function()
+                return debug.info(Collected, "ns")
+            end)
+            
+            if not Success or not Source then
+                continue
+            end
 
             if Source:find(".Client.Core.Anti") then
                 if Name == "compareTables" then
-                    hookfunction(Collected, function(Table1, Table2)
+                    pcall(hookfunction, Collected, function(Table1, Table2)
                         if Adonis.DebugMode then
                             warn(string.format(
                                 "Compare Tables Function Has Been Called!\nPassed Arguments: %s %s\n",
@@ -179,9 +172,10 @@ function Adonis:Init()
                         end
                         return true
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
 
                 elseif Name == "isMethamethodValid" then
-                    hookfunction(Collected, function(Metamethod)
+                    pcall(hookfunction, Collected, function(Metamethod)
                         if Adonis.DebugMode then
                             warn(string.format(
                                 "Is Metamethod Valid Function Has Been Called!\nPassed Arguments: %s\n",
@@ -190,9 +184,10 @@ function Adonis:Init()
                         end
                         return true
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
 
                 elseif Name == "checkStack" then
-                    hookfunction(Collected, function(Method)
+                    pcall(hookfunction, Collected, function(Method)
                         if Adonis.DebugMode then
                             warn(string.format(
                                 "Check Stack Function Has Been Called!\nPassed Arguments: %s\n",
@@ -201,58 +196,68 @@ function Adonis:Init()
                         end
                         return false
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
                     
                 elseif Name == "getInfo" then
-                    hookfunction(Collected, function(...)
+                    pcall(hookfunction, Collected, function(...)
                         if Adonis.DebugMode then
                             warn("GetInfo Anti-Cheat Check Blocked!\n")
                         end
                         return {}
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
                     
                 elseif Name == "checkUpvalues" then
-                    hookfunction(Collected, function(...)
+                    pcall(hookfunction, Collected, function(...)
                         if Adonis.DebugMode then
                             warn("Check Upvalues Function Blocked!\n")
                         end
                         return true
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
                     
                 elseif Name == "checkConstants" then
-                    hookfunction(Collected, function(...)
+                    pcall(hookfunction, Collected, function(...)
                         if Adonis.DebugMode then
                             warn("Check Constants Function Blocked!\n")
                         end
                         return true
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
                     
                 elseif Name == "scanRemotes" then
-                    hookfunction(Collected, function(...)
+                    pcall(hookfunction, Collected, function(...)
                         if Adonis.DebugMode then
                             warn("Scan Remotes Function Blocked!\n")
                         end
                         return
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
                     
                 elseif Name == "verifyPlayer" then
-                    hookfunction(Collected, function(...)
+                    pcall(hookfunction, Collected, function(...)
                         if Adonis.DebugMode then
                             warn("Verify Player Function Blocked!\n")
                         end
                         return true
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
                     
                 elseif Name == "checkProperty" then
-                    hookfunction(Collected, function(...)
+                    pcall(hookfunction, Collected, function(...)
                         if Adonis.DebugMode then
                             warn("Check Property Function Blocked!\n")
                         end
                         return true
                     end)
+                    Stats.AntiCheatFunctions = Stats.AntiCheatFunctions + 1
                 end
 
             elseif Source:find(".Client.Client") then
-                local Upvalues = debug.getupvalues(Collected)
+                local Success2, Upvalues = pcall(debug.getupvalues, Collected)
+                if not Success2 or not Upvalues then
+                    continue
+                end
 
                 if #Upvalues == 3 then
                     local Functions = {}
@@ -264,22 +269,21 @@ function Adonis:Init()
 
                         local Info = GetInfo(Value)
 
-                        if Info.name == "" or Info.name == "tostring" or Info.name == "logError" then
+                        if Info and (Info.name == "" or Info.name == "tostring" or Info.name == "logError") then
                             table.insert(Functions, Value)
                         end
                     end
 
-                    if #Functions ~= 3 then
-                        continue
+                    if #Functions == 3 then
+                        pcall(hookfunction, Collected, function(...) end)
+                        Stats.ClientFunctions = Stats.ClientFunctions + 1
                     end
-
-                    hookfunction(Collected, function(...) end)
                 end
                 
             elseif Source:find(".Client.Core.Remote") then
                 if Name == "FireServer" or Name == "InvokeServer" then
                     local OldFunc = Collected
-                    hookfunction(Collected, function(Remote, ...)
+                    pcall(hookfunction, Collected, function(Remote, ...)
                         local Args = {...}
                         if typeof(Remote) == "Instance" and (Remote.Name:find("AC_") or Remote.Name:find("Detected")) then
                             if Adonis.DebugMode then
@@ -289,13 +293,15 @@ function Adonis:Init()
                         end
                         return OldFunc(Remote, ...)
                     end)
+                    Stats.RemoteFunctions = Stats.RemoteFunctions + 1
                 end
                 
             elseif Source:find(".Client.Core.Process") then
                 if Name == "getPlayer" or Name == "checkPlayer" then
-                    hookfunction(Collected, function(...)
-                        return game.Players.LocalPlayer
+                    pcall(hookfunction, Collected, function(...)
+                        return LocalPlayer
                     end)
+                    Stats.ProcessFunctions = Stats.ProcessFunctions + 1
                 end
             end
         end
@@ -311,12 +317,13 @@ function Adonis:Init()
 
             if DepsName then
                 ClientTable = Collected
+                Stats.DetectedTables = Stats.DetectedTables + 1
             end
             
             if Variables and typeof(Variables) == "table" then
                 local TrackingMouse = rawget(Variables, "TrackingMouse")
                 if TrackingMouse ~= nil then
-                    rawset(Variables, "TrackingMouse", false)
+                    pcall(rawset, Variables, "TrackingMouse", false)
                 end
             end
             
@@ -324,8 +331,8 @@ function Adonis:Init()
                 for Key, Value in pairs(Process) do
                     if typeof(Value) == "function" then
                         local Info = GetInfo(Value)
-                        if Info.short_src and Info.short_src:find(".Client.Core.Process") then
-                            hookfunction(Value, function(...)
+                        if Info and Info.short_src and Info.short_src:find(".Client.Core.Process") then
+                            pcall(hookfunction, Value, function(...)
                                 return true
                             end)
                         end
@@ -351,9 +358,9 @@ function Adonis:Init()
                                 continue
                             end
 
-                            Send("ClientCheck", {
-                                Sent     = ClientTable.Remote.Sent or 0,
-                                Received = ClientTable.Remote.Received,
+                            pcall(Send, "ClientCheck", {
+                                Sent     = ClientTable.Remote and ClientTable.Remote.Sent or 0,
+                                Received = ClientTable.Remote and ClientTable.Remote.Received or 0,
                             }, ClientTable.DepsName)
 
                             if Adonis.DebugMode then
@@ -371,7 +378,7 @@ function Adonis:Init()
                 local Path = Info and Info.short_src
 
                 if Path and Path:find(".Client.Client") then
-                    hookfunction(Disconnect, function(Info)
+                    pcall(hookfunction, Disconnect, function(Info)
                         if Adonis.DebugMode then
                             warn(string.format(
                                 "Disconnect Function Has Been Called!\nPassed Arguments: %s\n",
@@ -380,6 +387,7 @@ function Adonis:Init()
                         end
                         return
                     end)
+                    Stats.DisconnectHooks = Stats.DisconnectHooks + 1
                 end
             end
 
@@ -388,7 +396,7 @@ function Adonis:Init()
                 local Path = Info and Info.short_src
 
                 if (Path and Path:find(".Client.Client")) or (Path and Path:find("ClientMover")) then
-                    hookfunction(Kill, function(Info)
+                    pcall(hookfunction, Kill, function(Info)
                         if Adonis.DebugMode then
                             warn(string.format(
                                 "Kill Function Has Been Called!\nPassed Arguments: %s\n",
@@ -397,6 +405,7 @@ function Adonis:Init()
                         end
                         return
                     end)
+                    Stats.KillHooks = Stats.KillHooks + 1
                 end
             end
 
@@ -405,7 +414,7 @@ function Adonis:Init()
                 local Path = Info and Info.short_src
 
                 if Path and Path:find(".Client.Core.Anti") then
-                    hookfunction(Detected, function(Action, Info, NoCrash)
+                    pcall(hookfunction, Detected, function(Action, Info, NoCrash)
                         if Adonis.DebugMode then
                             warn(string.format(
                                 "Detected Function Has Been Called!\nPassed Arguments: %s %s %s\n",
@@ -416,6 +425,7 @@ function Adonis:Init()
                         end
                         return true
                     end)
+                    Stats.DetectedHooks = Stats.DetectedHooks + 1
                 end
             end
 
@@ -430,13 +440,14 @@ function Adonis:Init()
                     continue
                 end
 
-                hookfunction(DetectedF, function()
+                pcall(hookfunction, DetectedF, function()
                     if Adonis.DebugMode then
                         warn(string.format("%s Function Has Been Called!\n", Method))
                     end
 
                     return false
                 end)
+                Stats.DetectorHooks = Stats.DetectorHooks + 1
             end
         end
     end
@@ -445,7 +456,7 @@ function Adonis:Init()
         local OriginalNameCall; OriginalNameCall = hookmetamethod(game, "__namecall", newcclosure(function(Object, ...)
             local Arguments = {...}
             local Method = getnamecallmethod()
-            if Method == "FireServer" and Object.Name == "MainRemoteEvent" and Arguments[1] == "Detection" then
+            if Method == "FireServer" and typeof(Object) == "Instance" and Object.Name == "MainRemoteEvent" and Arguments[1] == "Detection" then
                 return coroutine.yield()
             end
             return OriginalNameCall(Object, ...)
@@ -460,10 +471,13 @@ function Adonis:Init()
         for _, Connected in pairs(getconnections(LogService.MessageOut)) do
             if not table.find(Table, Connected) then
                 Table[# Table + 1] = Connected
-                local User = pcall(getupvalues, Connected.Function) and getupvalues(Connected.Function) or {}
+                local Success, User = pcall(getupvalues, Connected.Function)
+                if not Success or not User then
+                    continue
+                end
 
                 if # User >= 9 and type(User[9]) == "table" and type(User[9][1]) == "function" then
-                    pcall(GetValue, User[9][1], 14, function()
+                    pcall(SetUpValue, User[9][1], 14, function()
                         return function(Conntected)
                             if type(Conntected) == "table" then
                                 for Index = 1, 4 do
@@ -475,7 +489,7 @@ function Adonis:Init()
                         end
                     end)
 
-                    pcall(GetValue, User[9][1], 1, function()
+                    pcall(SetUpValue, User[9][1], 1, function()
                         task.wait(200)
                     end)
 
@@ -483,10 +497,30 @@ function Adonis:Init()
                     pcall(hookfunction, User[9][1], function()
                         return {}
                     end)
+                    
+                    Stats.MessageOutConnections = Stats.MessageOutConnections + 1
                 end
             end
         end
     end)
+    
+    if Adonis.DebugMode then
+        task.spawn(function()
+            task.wait(3)
+            warn("=== Adonis Bypass Statistics ===")
+            warn(string.format("Anti-Cheat Functions Hooked: %d", Stats.AntiCheatFunctions))
+            warn(string.format("Client Functions Hooked: %d", Stats.ClientFunctions))
+            warn(string.format("Remote Functions Hooked: %d", Stats.RemoteFunctions))
+            warn(string.format("Process Functions Hooked: %d", Stats.ProcessFunctions))
+            warn(string.format("Client Tables Found: %d", Stats.DetectedTables))
+            warn(string.format("Disconnect Hooks: %d", Stats.DisconnectHooks))
+            warn(string.format("Kill Hooks: %d", Stats.KillHooks))
+            warn(string.format("Detected Hooks: %d", Stats.DetectedHooks))
+            warn(string.format("Detector Table Hooks: %d", Stats.DetectorHooks))
+            warn(string.format("MessageOut Connections: %d", Stats.MessageOutConnections))
+            warn("================================")
+        end)
+    end
 end
 
 return Adonis
