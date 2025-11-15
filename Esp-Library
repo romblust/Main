@@ -566,19 +566,19 @@ function EspInterface:Load()
 		end
 
         Player.CharacterAdded:Connect(function(Character)
-            if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("Humanoid") and Character:FindFirstChild("FULLY_LOADED_CHAR") then
+            if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("FULLY_LOADED_CHAR") then
                 CreateObject(Player);
             end
         end)
 	end
 
 	EspInterface.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
-		if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("Humanoid") and Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
+		if Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
 			CreateObject(Player)
 		end
 
 		Player.CharacterAdded:Connect(function(Character)
-            if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("Humanoid") and Character:FindFirstChild("FULLY_LOADED_CHAR") then
+            if Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("FULLY_LOADED_CHAR") then
                 CreateObject(Player)
             end
         end)
